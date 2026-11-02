@@ -13,12 +13,16 @@ function okResponse() {
   };
 }
 
-function failResponse() {
+function failResponse(status = 500) {
   return {
     ok: false,
-    status: 502,
+    status,
     body: { cancel: async () => undefined },
   };
+}
+
+function wakingResponse() {
+  return failResponse(502);
 }
 
 function targets(count = 2) {
@@ -73,7 +77,7 @@ describe("createWakeBroadcaster", () => {
     expect(logs[0]).toMatchObject({
       level: "info",
       message: "wake.broadcast",
-      fields: { targets: 3, failed: 0 },
+      fields: { targets: 3, waking: 0, failed: 0 },
     });
   });
 
@@ -149,6 +153,26 @@ describe("createWakeBroadcaster", () => {
     expect(logs).toEqual(["wake.broadcast"]);
   });
 
+  it("counts edge 502/503/504 as waking, not as failure", async () => {
+    const logs: Array<{ level: string; fields?: Record<string, unknown> }> = [];
+    const broadcaster = createWakeBroadcaster({
+      targets: targets(3),
+      intervalMs: 1_800_000,
+      timeoutMs: 1_000,
+      fetchImpl: (async (url: string) => {
+        if (url.includes(":3001")) return failResponse(503);
+        if (url.includes(":3002")) return wakingResponse();
+        return okResponse();
+      }) as unknown as typeof fetch,
+      logFn: (level, _message, fields) => logs.push({ level, fields }),
+    });
+
+    broadcaster.maybeWake();
+    await flush();
+
+    expect(logs[0]).toMatchObject({ level: "info", fields: { targets: 3, waking: 2, failed: 0 } });
+  });
+
   it("logs a warning when targets fail", async () => {
     const logs: Array<{ level: string; fields?: Record<string, unknown> }> = [];
     const broadcaster = createWakeBroadcaster({
@@ -165,7 +189,7 @@ describe("createWakeBroadcaster", () => {
     broadcaster.maybeWake();
     await flush();
 
-    expect(logs[0]).toMatchObject({ level: "warn", fields: { targets: 2, failed: 2 } });
+    expect(logs[0]).toMatchObject({ level: "warn", fields: { targets: 2, waking: 0, failed: 2 } });
   });
 
   it("does nothing when disabled", async () => {
