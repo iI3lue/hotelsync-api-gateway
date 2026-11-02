@@ -4,9 +4,12 @@ import type { AddressInfo } from "node:net";
 import express from "express";
 import request from "supertest";
 import { createApp } from "../../src/app.js";
+import { log } from "../../src/logger.js";
 import { TEST_SECRET, testConfig } from "../helpers/config.js";
 
 jest.mock("../../src/logger.js", () => ({ log: jest.fn() }));
+
+const logMock = log as jest.Mock;
 
 const UUID_V4 = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -37,7 +40,20 @@ afterAll(async () => {
 beforeEach(() => {
   upstreamCalls = 0;
   receivedHeaders = {};
+  logMock.mockClear();
 });
+
+async function waitForWake(timeoutMs = 2_000) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    if (wakeMessages().length > 0) return;
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+}
+
+function wakeMessages() {
+  return logMock.mock.calls.filter(([, message]) => message === "wake.broadcast");
+}
 
 function gateway() {
   return createApp(testConfig({ PROPERTY_SERVICE_URL: upstreamUrl }));
@@ -75,6 +91,45 @@ describe("gateway secret", () => {
 
     expect(res.status).toBe(200);
     expect(upstreamCalls).toBe(1);
+  });
+});
+
+describe("wake broadcast", () => {
+  function gatewayWithWake() {
+    return createApp(
+      testConfig({
+        PROPERTY_SERVICE_URL: upstreamUrl,
+        WAKE_ALL_ENABLED: true,
+        WAKE_ALL_INTERVAL_MS: 1_800_000,
+        WAKE_ALL_TIMEOUT_MS: 1_000,
+      })
+    );
+  }
+
+  it("wakes every service after an authenticated request", async () => {
+    await request(gatewayWithWake())
+      .get("/property/hotels")
+      .set("x-gateway-secret", TEST_SECRET);
+    await waitForWake();
+
+    expect(wakeMessages()).toHaveLength(1);
+    expect(wakeMessages()[0][2]).toMatchObject({ targets: 11 });
+  });
+
+  it("does not wake services for unauthenticated traffic", async () => {
+    await request(gatewayWithWake()).get("/property/hotels");
+    await new Promise((resolve) => setTimeout(resolve, 100));
+
+    expect(wakeMessages()).toHaveLength(0);
+  });
+
+  it("wakes only once inside the interval window", async () => {
+    const app = gatewayWithWake();
+    await request(app).get("/property/hotels").set("x-gateway-secret", TEST_SECRET);
+    await waitForWake();
+    await request(app).get("/property/hotels").set("x-gateway-secret", TEST_SECRET);
+
+    expect(wakeMessages()).toHaveLength(1);
   });
 });
 

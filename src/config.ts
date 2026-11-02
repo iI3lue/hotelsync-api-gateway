@@ -10,6 +10,17 @@ const envSchema = z.object({
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
   PORT: z.coerce.number().int().min(1).max(65_535).default(8080),
   UPSTREAM_TIMEOUT_MS: z.coerce.number().int().min(100).max(60_000).default(10_000),
+  WAKE_ALL_ENABLED: z
+    .string()
+    .optional()
+    .transform((value) => (value ?? "true").toLowerCase() !== "false"),
+  WAKE_ALL_INTERVAL_MS: z.coerce
+    .number()
+    .int()
+    .min(0)
+    .max(86_400_000)
+    .default(1_800_000),
+  WAKE_ALL_TIMEOUT_MS: z.coerce.number().int().min(100).max(120_000).default(60_000),
   GATEWAY_SHARED_SECRET: z.string().min(16),
   ...serviceUrlShape,
 });
