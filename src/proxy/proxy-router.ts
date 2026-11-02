@@ -97,7 +97,11 @@ export function createProxyRouter(target: ProxyTarget): Router {
   router.all("*", (req: Request, res: Response) => {
     void (async () => {
       const requestId = String(res.locals.requestId ?? "");
-      const clientIp = String(res.locals.clientIp ?? "");
+      const forwardedClientIp = req.header("x-client-ip");
+      const clientIp =
+        res.locals.gatewayAuthenticated === true && forwardedClientIp
+          ? forwardedClientIp
+          : String(res.locals.clientIp ?? "");
       const url = `${baseUrl}${req.url}`;
 
       let body: Buffer | undefined;

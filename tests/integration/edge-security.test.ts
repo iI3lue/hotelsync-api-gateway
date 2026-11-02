@@ -109,10 +109,15 @@ describe("header hardening", () => {
     expect(receivedHeaders["x-gateway-secret"]).toBeUndefined();
   });
 
-  it("overwrites x-client-ip with the real peer address", async () => {
+  it("trusts x-client-ip only when the gateway secret authenticated the caller", async () => {
     await forward({ "x-client-ip": "203.0.113.9" });
 
-    expect(receivedHeaders["x-client-ip"]).not.toBe("203.0.113.9");
+    expect(receivedHeaders["x-client-ip"]).toBe("203.0.113.9");
+  });
+
+  it("falls back to the peer address when the caller sends no x-client-ip", async () => {
+    await forward({});
+
     expect(receivedHeaders["x-client-ip"]).toMatch(/127\.0\.0\.1|::1|::ffff:127\.0\.0\.1/);
   });
 

@@ -20,6 +20,7 @@ export function requireGatewaySecret(secret: string) {
       return;
     }
 
+    res.locals.gatewayAuthenticated = true;
     next();
   };
 }
