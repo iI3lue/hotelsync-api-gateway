@@ -22,11 +22,16 @@ export function createApp(config: GatewayConfig) {
   app.use(requireGatewaySecret(config.GATEWAY_SHARED_SECRET));
 
   for (const route of SERVICE_ROUTES) {
+    const allowedHeaders =
+      "allowedHeaders" in route ? route.allowedHeaders : undefined;
+    const timeoutMs =
+      "timeoutMs" in route ? route.timeoutMs : config.UPSTREAM_TIMEOUT_MS;
     app.use(
       route.prefix,
       createProxyRouter({
         upstreamUrl: config[route.urlKey],
-        timeoutMs: config.UPSTREAM_TIMEOUT_MS,
+        timeoutMs,
+        allowedHeaders,
       })
     );
   }

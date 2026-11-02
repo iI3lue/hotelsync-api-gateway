@@ -36,6 +36,7 @@ const RESPONSE_SKIP = new Set([
 export interface ProxyTarget {
   upstreamUrl: string;
   timeoutMs: number;
+  allowedHeaders?: readonly string[];
 }
 
 function errorJson(res: Response, statusCode: number, error: string, message: string): void {
@@ -50,15 +51,25 @@ async function readBody(req: Request): Promise<Buffer> {
   return Buffer.concat(chunks);
 }
 
-function isStrippedHeader(name: string): boolean {
+function isStrippedHeader(name: string, allowed: Set<string>): boolean {
   const lower = name.toLowerCase();
+  if (allowed.has(lower)) return false;
   return STRIPPED_REQUEST_HEADERS.has(lower) || lower.startsWith("x-internal-");
 }
 
-function buildUpstreamHeaders(req: Request, requestId: string, clientIp: string): Headers {
+function buildUpstreamHeaders(
+  req: Request,
+  requestId: string,
+  clientIp: string,
+  allowed: Set<string>
+): Headers {
   const headers = new Headers();
   for (const [key, value] of Object.entries(req.headers)) {
-    if (value === undefined || HOP_BY_HOP.has(key.toLowerCase()) || isStrippedHeader(key)) {
+    if (
+      value === undefined ||
+      HOP_BY_HOP.has(key.toLowerCase()) ||
+      isStrippedHeader(key, allowed)
+    ) {
       continue;
     }
     if (Array.isArray(value)) {
@@ -93,6 +104,9 @@ function isTimeout(err: unknown): boolean {
 export function createProxyRouter(target: ProxyTarget): Router {
   const router = Router();
   const baseUrl = target.upstreamUrl.replace(/\/+$/, "");
+  const allowedHeaders = new Set(
+    (target.allowedHeaders ?? []).map((name) => name.toLowerCase())
+  );
 
   router.all("*", (req: Request, res: Response) => {
     void (async () => {
@@ -117,7 +131,7 @@ export function createProxyRouter(target: ProxyTarget): Router {
       try {
         const upstream = await fetch(url, {
           method: req.method,
-          headers: buildUpstreamHeaders(req, requestId, clientIp),
+          headers: buildUpstreamHeaders(req, requestId, clientIp, allowedHeaders),
           body: body && body.length > 0 ? toArrayBuffer(body) : undefined,
           redirect: "manual",
           signal: AbortSignal.timeout(target.timeoutMs),

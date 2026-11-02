@@ -126,4 +126,27 @@ describe("header hardening", () => {
 
     expect(receivedHeaders.authorization).toBe("Bearer abc.def.ghi");
   });
+
+  it("allows x-provider-key only on the channel-manager route", async () => {
+    await request(
+      createApp(
+        testConfig({
+          PROPERTY_SERVICE_URL: upstreamUrl,
+          CHANNEL_MANAGER_SERVICE_URL: upstreamUrl,
+        })
+      )
+    )
+      .get("/property/hotels")
+      .set("x-gateway-secret", TEST_SECRET)
+      .set("x-provider-key", "provider-key");
+
+    expect(receivedHeaders["x-provider-key"]).toBeUndefined();
+
+    await request(createApp(testConfig({ CHANNEL_MANAGER_SERVICE_URL: upstreamUrl })))
+      .get("/channel-manager/probe")
+      .set("x-gateway-secret", TEST_SECRET)
+      .set("x-provider-key", "provider-key");
+
+    expect(receivedHeaders["x-provider-key"]).toBe("provider-key");
+  });
 });

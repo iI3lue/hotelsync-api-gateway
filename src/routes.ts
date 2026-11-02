@@ -9,7 +9,12 @@ export const SERVICE_ROUTES = [
   { prefix: "/loyalty", urlKey: "LOYALTY_SERVICE_URL" },
   { prefix: "/payments", urlKey: "PAYMENTS_SERVICE_URL" },
   { prefix: "/analytics", urlKey: "ANALYTICS_SERVICE_URL" },
-  { prefix: "/channel-manager", urlKey: "CHANNEL_MANAGER_SERVICE_URL" },
+  {
+    prefix: "/channel-manager",
+    urlKey: "CHANNEL_MANAGER_SERVICE_URL",
+    allowedHeaders: ["x-provider-key"],
+    timeoutMs: 45_000,
+  },
 ] as const;
 
 export type ServiceRoute = (typeof SERVICE_ROUTES)[number];
