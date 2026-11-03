@@ -48,6 +48,7 @@ export function createApp(config: GatewayConfig) {
         upstreamUrl: config[route.urlKey],
         timeoutMs,
         allowedHeaders,
+        gatewaySecret: config.GATEWAY_SHARED_SECRET,
       })
     );
   }

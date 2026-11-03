@@ -37,6 +37,7 @@ export interface ProxyTarget {
   upstreamUrl: string;
   timeoutMs: number;
   allowedHeaders?: readonly string[];
+  gatewaySecret?: string;
 }
 
 function errorJson(res: Response, statusCode: number, error: string, message: string): void {
@@ -61,7 +62,8 @@ function buildUpstreamHeaders(
   req: Request,
   requestId: string,
   clientIp: string,
-  allowed: Set<string>
+  allowed: Set<string>,
+  gatewaySecret?: string
 ): Headers {
   const headers = new Headers();
   for (const [key, value] of Object.entries(req.headers)) {
@@ -80,6 +82,9 @@ function buildUpstreamHeaders(
   }
   headers.set("x-request-id", requestId);
   headers.set("x-client-ip", clientIp);
+  // La cabecera entrante se descarta (es la prueba BFF->gateway); esta es la que
+  // prueba a los servicios que la peticion paso por el gateway.
+  if (gatewaySecret) headers.set("x-gateway-secret", gatewaySecret);
   return headers;
 }
 
@@ -131,7 +136,13 @@ export function createProxyRouter(target: ProxyTarget): Router {
       try {
         const upstream = await fetch(url, {
           method: req.method,
-          headers: buildUpstreamHeaders(req, requestId, clientIp, allowedHeaders),
+          headers: buildUpstreamHeaders(
+            req,
+            requestId,
+            clientIp,
+            allowedHeaders,
+            target.gatewaySecret
+          ),
           body: body && body.length > 0 ? toArrayBuffer(body) : undefined,
           redirect: "manual",
           signal: AbortSignal.timeout(target.timeoutMs),

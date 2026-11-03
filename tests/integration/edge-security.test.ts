@@ -158,10 +158,10 @@ describe("header hardening", () => {
     expect(receivedHeaders["x-internal-trace"]).toBeUndefined();
   });
 
-  it("does not forward the gateway secret upstream", async () => {
+  it("injects the gateway secret on the upstream request", async () => {
     await forward({});
 
-    expect(receivedHeaders["x-gateway-secret"]).toBeUndefined();
+    expect(receivedHeaders["x-gateway-secret"]).toBe(TEST_SECRET);
   });
 
   it("trusts x-client-ip only when the gateway secret authenticated the caller", async () => {
